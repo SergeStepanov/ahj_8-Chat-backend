@@ -1,29 +1,5 @@
-/* eslint-disable no-useless-return */
 /* eslint-disable consistent-return */
 /* eslint-disable no-return-await */
-const tickets = [
-  {
-    id: '1',
-    name: 'Задача',
-    description: 'полное описание задачи',
-    status: 'false',
-    created: '2017-02-03 12:13',
-  },
-  {
-    id: '2',
-    name: 'Задача 2',
-    description: 'полное описание задачи 2',
-    status: 'true',
-    created: '2020-02-03 12:13',
-  },
-  {
-    id: '3',
-    name: 'Задача 3',
-    description: 'полное описание задачи 3',
-    status: 'false',
-    created: '2021-23-03 12:13',
-  },
-];
 
 const http = require('http');
 const Koa = require('koa');
@@ -31,33 +7,15 @@ const koaBody = require('koa-body');
 const uuid = require('uuid');
 const moment = require('moment');
 const cors = require('@koa/cors');
+// const Router = require('koa-router');
+const WS = require('ws');
 
 moment.locale('ru');
 
 const app = new Koa();
+// const router = new Router();
 
-// test push ticket
-tickets.push({
-  id: uuid.v4(),
-  name: 'Задача 5',
-  description: 'полное описание задачи 5',
-  status: 'false',
-  created: `${moment().format('L')} ${moment().format('LT')}`,
-});
-tickets.push({
-  id: uuid.v4(),
-  name: 'Задача 6',
-  description: 'полное описание задачи 6',
-  status: 'false',
-  created: `${moment().format('L')} ${moment().format('LT')}`,
-});
-tickets.push({
-  id: uuid.v4(),
-  name: 'Задача 32',
-  description: 'полное описание задачи 32',
-  status: 'false',
-  created: `${moment().format('L')} ${moment().format('LT')}`,
-});
+const clients = [];
 
 // koaBody
 app.use(
@@ -65,7 +23,6 @@ app.use(
     urlencoded: true,
     multipart: true,
     json: true,
-    text: true,
   }),
 );
 
@@ -104,82 +61,50 @@ app.use(async (ctx, next) => {
   }
 });
 
-// response
-
-app.use(async (ctx) => {
-  const { method, id: reqId } = ctx.request.query;
-  const { name: reqName, description: reqDescription } = ctx.request.body;
-
-  switch (method) {
-    case 'allTickets':
-      ctx.response.body = JSON.stringify(
-        tickets.map(({
-          id, name, status, created,
-        }) => ({
-          id,
-          name,
-          status,
-          created,
-        })),
-      );
-      return;
-
-    case 'ticketById':
-      if (reqId) {
-        ctx.response.body = JSON.stringify(
-          tickets.find(({ id }) => id === reqId),
-        );
-      } else {
-        ctx.response.status = 404;
-      }
-      return;
-
-    case 'createTicket':
-      // eslint-disable-next-line no-case-declarations
-      const newTicket = {
-        id: uuid.v4(),
-        name: reqName,
-        description: reqDescription,
-        status: 'false',
-        created: `${moment().format('L')} ${moment().format('LT')}`,
-      };
-      tickets.push(newTicket);
-
-      ctx.response.body = JSON.stringify([newTicket]);
-      return;
-
-    case 'editTicket':
-      // eslint-disable-next-line no-case-declarations
-      const index = tickets.find(({ id }) => id === reqId);
-
-      index.name = reqName;
-      index.description = reqDescription;
-      ctx.response.body = JSON.stringify(index);
-
-      return;
-
-    case 'deleteTicket':
-      // eslint-disable-next-line no-case-declarations
-      const ind = tickets.findIndex(({ id }) => id === reqId);
-
-      tickets.splice(ind, 1);
-      ctx.response.body = JSON.stringify(true);
-      return;
-
-    case 'ticketStatus':
-      // eslint-disable-next-line no-case-declarations
-      const statusTic = tickets.find(({ id }) => id === reqId);
-      statusTic.status = true;
-      ctx.response.body = JSON.stringify(statusTic);
-
-      return;
-
-    default:
-      ctx.response.status = 404;
-      return;
-  }
-});
-
 // Server
 const port = process.env.PORT || 7070;
-http.createServer(app.callback()).listen(port);
+const server = http.createServer(app.callback());
+const wsServer = new WS.Server({ server });
+
+wsServer.on('connection', (ws) => {
+  const client = {};
+  client.id = uuid.v4();
+
+  ws.on('message', (msg) => {
+    const messageParse = JSON.parse(msg);
+
+    if (messageParse.type === 'newUser') {
+      const newUser = clients.findIndex((val) => val.name === messageParse.name);
+      if (newUser !== -1) {
+        ws.send(JSON.stringify({ type: 'error name' }));
+      } else {
+        client.name = messageParse.name;
+        clients.push(client);
+        [...wsServer.clients]
+          .filter((val) => val.readyState === WS.OPEN)
+          .forEach((val) => val.send(JSON.stringify({ clients: [...clients], type: 'true name' })));
+      }
+    }
+    // Array.from(wsServer.clients)
+    //   .filter((o) => o.readyState === WS.OPEN)
+    //   .forEach((o) => o.send(JSON.stringify(messageParse)));
+  });
+
+  ws.on('close', () => {
+    const indexArr = clients.findIndex((item) => item.id === client.id);
+    clients.splice(indexArr, 1);
+    // if (client.name !== null) {
+    //   wsServer.clients.forEach((item) =>
+    //     item.send(
+    //       JSON.stringify({
+    //         type: 'user disconected',
+    //         name: client.name,
+    //         data: clients,
+    //       })
+    //     )
+    //   );
+    // }
+  });
+});
+
+server.listen(port);

@@ -26,9 +26,11 @@
     "forever": "^4.0.3",
     "koa": "^2.13.4",
     "koa-body": "^4.2.0",
+    "koa-router": "^10.1.1",
     "koa-static": "^5.0.0",
     "moment": "^2.29.1",
-    "uuid": "^8.3.2"
+    "uuid": "^8.3.2",
+    "ws": "^8.5.0"
   },
   "devDependencies": {
     "eslint": "^8.9.0",
